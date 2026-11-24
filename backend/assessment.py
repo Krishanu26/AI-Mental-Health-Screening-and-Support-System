@@ -1,7 +1,5 @@
 from datetime import datetime, timezone
-
-from bson import ObjectId
-from bson.errors import InvalidId
+import secrets
 
 from backend.assessment_data import BDI2_QUESTIONS
 
@@ -75,6 +73,8 @@ def create_assessment_document(
     }
     if research_consent:
         document["raw_responses_for_ml"] = [item["selected_text"] for item in selected]
+    if storage_consent:
+        document["feedback_token"] = secrets.token_urlsafe(32)
     return document
 
 
@@ -85,20 +85,16 @@ def save_assessment(document: dict) -> str:
     return str(result.inserted_id)
 
 
-def save_recommendation_feedback(assessment_id: str, followed: bool) -> None:
+def save_recommendation_feedback(feedback_token: str, followed: bool) -> None:
     if not isinstance(followed, bool):
         raise ValueError("Follow-up response must be true or false.")
-    if not isinstance(assessment_id, str):
-        raise ValueError("Invalid assessment ID.")
-    try:
-        object_id = ObjectId(assessment_id)
-    except (InvalidId, TypeError) as exc:
-        raise ValueError("Invalid assessment ID.") from exc
+    if not isinstance(feedback_token, str) or len(feedback_token) < 32:
+        raise ValueError("Invalid feedback token.")
 
     from backend.database import get_collections
     _, assessments, _, _ = get_collections()
     result = assessments.update_one(
-        {"_id": object_id},
+        {"feedback_token": feedback_token},
         {"$set": {"recommendation_feedback": {
             "followed": followed,
             "recorded_at": datetime.now(timezone.utc),
