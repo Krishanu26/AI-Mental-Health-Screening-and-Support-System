@@ -228,6 +228,24 @@ Consented assessment records are stored in the MongoDB `users` collection in the
 
 Set `ADMIN_EMAILS=admin@example.com` in `.env` to enable the aggregate insights page for that account. The application remains a research/academic prototype and must not be used with real patient data without privacy, security, ethics, and legal review.
 
+## Docker deployment and end-to-end verification
+
+The Docker Compose stack runs the React frontend behind Nginx, the Flask/Gunicorn API, MongoDB, Ollama, and the separate experimental ML worker.
+
+~~~bash
+cp .env.example .env
+# Set ADMIN_EMAILS in .env if an administrator account is needed.
+docker compose up -d --build --wait
+# Download the model once:
+docker compose exec ollama ollama pull llama3.2:1b
+# Set OLLAMA_ENABLED=true and OLLAMA_MODEL=llama3.2:1b in .env, then:
+docker compose up -d --force-recreate api
+~~~
+
+Open http://localhost:8080. Nginx serves the frontend and proxies /api requests to Flask. The API is also available at http://localhost:5000.
+
+The container-e2e GitHub Actions job starts the complete stack, connects to a real MongoDB service, pulls a real Ollama model, and tests the public HTTP route through Nginx. It verifies signup, sessions, assessment persistence, per-user isolation, feedback storage, admin authorization/analytics, a non-fallback model-generated chat response, chat-history consent, and deletion/session revocation. This is reproducible integration testing—not a public production deployment or clinical validation.
+
 ## Run automated checks\n\n```powershell\npython -m unittest discover -s backend -p "test_*.py" -v\ncd frontend\nnpm ci\nnpm run build\n```\n\nGitHub Actions runs the backend unit tests and frontend production build on pushes and pull requests to `main`.\n\n## Stop the application
 
 Press **Ctrl+C** in the terminal running `python main.py`. The launcher stops the frontend, backend, and background worker.
