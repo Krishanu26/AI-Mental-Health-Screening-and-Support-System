@@ -37,13 +37,17 @@ def score_responses(responses: list[int]) -> tuple[int, str]:
 
 
 def create_assessment_document(
-    responses: list[int], storage_consent: bool, research_consent: bool
+    responses: list[int], storage_consent: bool, research_consent: bool,
+    user_id: str | None = None,
 ) -> dict:
     """Build a result; callers decide whether to persist it."""
     if not isinstance(storage_consent, bool) or not isinstance(research_consent, bool):
         raise ValueError("Consent values must be true or false.")
     if research_consent and not storage_consent:
         raise ValueError("Research consent requires separate assessment-storage consent.")
+
+    if storage_consent and not user_id:
+        raise ValueError("Sign in to save an assessment to your personal history.")
 
     total, level = score_responses(responses)
     selected = []
@@ -68,13 +72,14 @@ def create_assessment_document(
         "research_consent": research_consent,
         "training_status": "eligible" if research_consent else "not_consented",
         "created_at": datetime.now(timezone.utc),
-        "schema_version": 4,
+        "schema_version": 5,
         "self_harm_item_positive": self_harm_item_positive,
     }
     if research_consent:
         document["raw_responses_for_ml"] = [item["selected_text"] for item in selected]
     if storage_consent:
-        document["feedback_token"] = secrets.token_urlsafe(32)
+        document["user_id"] = user_id
+        document["feedback_token"] = secrets.token_urlsafe(48)
     return document
 
 
