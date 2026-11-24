@@ -89,12 +89,12 @@ function App() {
   }
 
   async function submitRecommendationFeedback(followed) {
-    if (!result?.assessment_id || feedbackBusy) return;
+    if (!result?.feedback_token || feedbackBusy) return;
     setFeedbackBusy(true);
     setFeedbackError("");
     try {
       const res = await fetch(
-        `${API}/api/assessment/${encodeURIComponent(result.assessment_id)}/recommendation-feedback`,
+        `${API}/api/assessment/feedback/${encodeURIComponent(result.feedback_token)}/recommendation-feedback`,
         {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({followed})}
       );
       const data = await res.json();
@@ -147,7 +147,7 @@ function App() {
         {feedbackSaved !== null && <p role="status">Your response was saved.</p>}
         {feedbackError && <p role="alert">{feedbackError}</p>}
       </div>}
-      {result.assessment_id && <p className="muted">Reference: {result.assessment_id}</p>}
+      {result.assessment_id && <p className="muted">Feedback token: {result.feedback_token ? "available" : "not issued"}</p>}
     </section>}
     <section className="panel">
       <h2>Supportive chat</h2><p className="muted">Optional local Ollama integration. It does not diagnose or provide crisis support.</p>
