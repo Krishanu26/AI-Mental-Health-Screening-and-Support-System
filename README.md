@@ -1,6 +1,6 @@
 # AI Mental Health Screening and Support System
 
-An AI-assisted web application for preliminary mental-health self-screening and wellbeing support. The project combines a structured 21-question Beck Depression Inventory-II (BDI-II)-based assessment with conversational support, text analysis, and score-based recommendations.
+An AI-assisted web application for preliminary mental-health self-screening and wellbeing support. The project combines a structured 21-question Beck Depression Inventory-II (BDI-II)-based assessment with Conversational Support, Text Analysis, and Score-based recommendations.
 
 The application is a student-developed prototype for awareness and preliminary screening. It is **not a medical device, clinical diagnosis, substitute for a mental-health professional, or emergency/crisis service**.
 
