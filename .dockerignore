@@ -1,0 +1,1 @@
+.git\n.env\n.venv\nvenv\n__pycache__\n*.pyc\nfrontend/node_modules\nfrontend/dist\nmodels/*\nlogs/*\n
