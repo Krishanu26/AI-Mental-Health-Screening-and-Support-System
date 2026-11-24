@@ -20,7 +20,12 @@ class AssessmentScoringTests(unittest.TestCase):
             (19, "Mild Depression"), (20, "Moderate Depression"),
             (28, "Moderate Depression"), (29, "Severe Depression"),
         ]:
-            answers = [1 if i < total else 0 for i in range(21)]
+            remaining = total
+            answers = []
+            for _ in range(21):
+                score = min(3, remaining)
+                answers.append(score)
+                remaining -= score
             with self.subTest(total=total):
                 self.assertEqual(score_responses(answers)[1], expected)
 
