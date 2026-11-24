@@ -147,7 +147,7 @@ function App() {
         {feedbackSaved !== null && <p role="status">Your response was saved.</p>}
         {feedbackError && <p role="alert">{feedbackError}</p>}
       </div>}
-      {result.assessment_id && <p className="muted">Feedback token: {result.feedback_token ? "available" : "not issued"}</p>}
+      {result.feedback_token && <p className="muted">Feedback token: {result.feedback_token ? "available" : "not issued"}</p>}
     </section>}
     <section className="panel">
       <h2>Supportive chat</h2><p className="muted">Optional local Ollama integration. It does not diagnose or provide crisis support.</p>
