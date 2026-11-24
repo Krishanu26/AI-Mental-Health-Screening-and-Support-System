@@ -66,7 +66,7 @@ def submit_assessment():
         self_harm_positive = document["self_harm_item_positive"]
         return jsonify({
             "saved": document_id is not None,
-            "assessment_id": document_id,
+            "feedback_token": document.get("feedback_token"),
             "total_score": document["total_score"],
             "risk_level": level,
             "recommendations": RECOMMENDATIONS.get(level, {}),
@@ -93,13 +93,13 @@ def submit_assessment():
         return jsonify({"error": "Could not process the assessment. Check database configuration if storage was selected."}), 503
 
 
-@app.post("/api/assessment/<assessment_id>/recommendation-feedback")
-def recommendation_feedback(assessment_id):
+@app.post("/api/assessment/feedback/<feedback_token>/recommendation-feedback")
+def recommendation_feedback(feedback_token):
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return jsonify({"error": "A JSON response is required."}), 400
     try:
-        save_recommendation_feedback(assessment_id, data.get("followed"))
+        save_recommendation_feedback(feedback_token, data.get("followed"))
         return jsonify({"saved": True}), 200
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
