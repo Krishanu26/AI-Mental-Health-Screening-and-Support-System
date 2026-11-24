@@ -1,163 +1,29 @@
 import React from "react";
-import { createRoot } from "react-dom/client";
-import "./style.css";
-
-const API = "";
-
-function App() {
-  const [questions, setQuestions] = React.useState([]);
-  const [answers, setAnswers] = React.useState({});
-  const [storageConsent, setStorageConsent] = React.useState(false);
-  const [researchConsent, setResearchConsent] = React.useState(false);
-  const [result, setResult] = React.useState(null);
-  const [feedbackBusy, setFeedbackBusy] = React.useState(false);
-  const [feedbackSaved, setFeedbackSaved] = React.useState(null);
-  const [feedbackError, setFeedbackError] = React.useState("");
-  const [health, setHealth] = React.useState(null);
-  const [busy, setBusy] = React.useState(false);
-  const [error, setError] = React.useState("");
-  const [chatText, setChatText] = React.useState("");
-  const [chatReply, setChatReply] = React.useState("");
-  const [chatBusy, setChatBusy] = React.useState(false);
-
-  React.useEffect(() => {
-    fetch(`${API}/api/questions`)
-      .then(async r => {
-        if (!r.ok) throw new Error("Could not load assessment questions.");
-        return r.json();
-      })
-      .then(d => setQuestions(Array.isArray(d.questions) ? d.questions : []))
-      .catch(err => setError(err.message || "Cannot reach Flask API. Start main.py."));
-    fetch(`${API}/api/health`)
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then(setHealth)
-      .catch(() => setHealth({mongodb:"unavailable"}));
-  }, []);
-
-  async function submit(e) {
-    e.preventDefault();
-    setError("");
-    if (questions.length !== 21 || Object.keys(answers).length !== questions.length) {
-      setError("Please answer all 21 questions before submitting.");
-      return;
-    }
-    if (researchConsent && !storageConsent) {
-      setError("Research participation requires separate assessment-storage consent.");
-      return;
-    }
-    setBusy(true);
-    setResult(null);
-    setFeedbackSaved(null);
-    setFeedbackError("");
-    try {
-      const responses = questions.map((_, i) => Number(answers[i]));
-      const res = await fetch(`${API}/api/assessment`, {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({responses, storage_consent:storageConsent, research_consent:researchConsent})
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Assessment submission failed.");
-      setResult(data);
-    } catch (err) {
-      setError(err.message || "Assessment submission failed.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function sendChat(e) {
-    e.preventDefault();
-    const message = chatText.trim();
-    if (!message || chatBusy) return;
-    setChatBusy(true);
-    setChatReply("");
-    try {
-      const res = await fetch(`${API}/api/chat`, {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({message})
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Chat service is unavailable.");
-      setChatReply(data.reply || "No response was returned.");
-      setChatText("");
-    } catch (err) {
-      setChatReply(err.message || "Chat service is unavailable.");
-    } finally {
-      setChatBusy(false);
-    }
-  }
-
-  async function submitRecommendationFeedback(followed) {
-    if (!result?.feedback_token || feedbackBusy) return;
-    setFeedbackBusy(true);
-    setFeedbackError("");
-    try {
-      const res = await fetch(
-        `${API}/api/assessment/feedback/${encodeURIComponent(result.feedback_token)}/recommendation-feedback`,
-        {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({followed})}
-      );
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Could not save your response.");
-      setFeedbackSaved(followed);
-    } catch (err) {
-      setFeedbackError(err.message);
-    } finally {
-      setFeedbackBusy(false);
-    }
-  }
-
-  return <main className="shell">
-    <header>
-      <div className="mark">ORI</div>
-      <div><h1>Wellbeing Companion</h1><p>Private local-development assessment interface</p></div>
-      <span className={`status ${health?.mongodb==="connected"?"ok":"warn"}`}>{health?.mongodb || "Checking database…"}</span>
-    </header>
-    <section className="notice"><strong>Important:</strong> This questionnaire is a screening aid, not a diagnosis or treatment. It is not a substitute for a qualified mental-health professional.</section>
-    {error && <section className="notice" role="alert">{error}</section>}
-    {health?.mongodb !== "connected" && <p className="muted">Database is unavailable. You can still complete an assessment without saving it.</p>}
-    <form onSubmit={submit} className="panel">
-      <h2>Assessment</h2><p className="muted">Select one response for each question.</p>
-      {questions.map((q, i) => <fieldset key={i}>
-        <legend>{q.question}</legend>
-        {q.options.map((o, j) => <label className="option" key={j}>
-          <input type="radio" name={`q${i}`} value={j} checked={String(answers[i])===String(j)}
-            onChange={() => setAnswers(a=>({...a,[i]:j}))}/>
-          <span>{o.text}</span>
-        </label>)}
-      </fieldset>)}
-      <div className="consents">
-        <label><input type="checkbox" checked={storageConsent} onChange={e=>setStorageConsent(e.target.checked)}/> I consent to saving my assessment responses and score in the configured database. Optional.</label>
-        <label><input type="checkbox" checked={researchConsent} onChange={e=>setResearchConsent(e.target.checked)}/> Separately, I consent to use of de-identified responses for experimental research/model training. Optional and requires storage consent.</label>
-      </div>
-      <button disabled={busy || questions.length!==21}>{busy?"Processing…":"Submit assessment"}</button>
-    </form>
-    {result && <section className="panel result">
-      <h2>Your screening result</h2><div className="score">{result.total_score} / 63</div>
-      <h3>{result.risk_level}</h3><p>{result.notice}</p>
-      {result.safety_guidance && <p className="notice" role="alert">{result.safety_guidance}</p>}
-      <p className="muted">{result.storage_notice}</p>
-      <h3>Suggested next steps</h3>
-      <ul>{(result.recommendations?.main_recommendations || []).map((x,i)=><li key={i}>{x}</li>)}</ul>
-      {result.saved && <div className="feedback">
-        <h3>Did you follow any of these suggestions?</h3>
-        <p className="muted">Optional. Your answer is saved with this assessment. This app does not track physical movement.</p>
-        <button type="button" disabled={feedbackBusy || feedbackSaved!==null} onClick={()=>submitRecommendationFeedback(true)}>Yes</button>
-        <button type="button" disabled={feedbackBusy || feedbackSaved!==null} onClick={()=>submitRecommendationFeedback(false)}>No</button>
-        {feedbackSaved !== null && <p role="status">Your response was saved.</p>}
-        {feedbackError && <p role="alert">{feedbackError}</p>}
-      </div>}
-      {result.feedback_token && <p className="muted">Feedback token: {result.feedback_token ? "available" : "not issued"}</p>}
-    </section>}
-    <section className="panel">
-      <h2>Supportive chat</h2><p className="muted">Optional local Ollama integration. It does not diagnose or provide crisis support.</p>
-      <form onSubmit={sendChat} className="chatrow">
-        <input value={chatText} onChange={e=>setChatText(e.target.value)} maxLength={4000} placeholder="Write a message…" />
-        <button type="submit" disabled={chatBusy || !chatText.trim()}>{chatBusy?"Sending…":"Send"}</button>
-      </form>
-      {chatReply && <p className="chatreply" role="status">{chatReply}</p>}
-    </section>
-    <footer>ORI AI · Local development prototype · Experimental ML is not used to determine your screening category.</footer>
-  </main>;
+import{createRoot}from"react-dom/client";
+import"./style.css";
+const KEY="ori_session";
+function App(){
+ const[token,setToken]=React.useState(()=>localStorage.getItem(KEY)||""),[user,setUser]=React.useState(null),[mode,setMode]=React.useState("login"),[form,setForm]=React.useState({name:"",email:"",password:""}),[authError,setAuthError]=React.useState("");
+ const[questions,setQuestions]=React.useState([]),[answers,setAnswers]=React.useState({}),[store,setStore]=React.useState(false),[research,setResearch]=React.useState(false),[result,setResult]=React.useState(null),[history,setHistory]=React.useState([]),[stats,setStats]=React.useState(null),[tab,setTab]=React.useState("assessment"),[chat,setChat]=React.useState(""),[messages,setMessages]=React.useState([]),[saveChat,setSaveChat]=React.useState(false),[error,setError]=React.useState(""),[busy,setBusy]=React.useState(false),[health,setHealth]=React.useState(null);
+ const headers=React.useCallback((h={})=>({...h,...(token?{Authorization:"Bearer "+token}:{})}),[token]);
+ const api=React.useCallback(async(path,opts={})=>{const r=await fetch(path,{...opts,headers:headers(opts.headers||{})});const d=await r.json().catch(()=>({}));if(!r.ok)throw Error(d.error||"Request failed");return d},[headers]);
+ const refresh=React.useCallback(async()=>{if(!token)return;try{const me=await api("/api/auth/me");setUser(me.user);setHistory((await api("/api/assessments")).assessments||[]);if(me.user.is_admin)setStats(await api("/api/admin/analytics"));}catch{localStorage.removeItem(KEY);setToken("");setUser(null)}},[token,api]);
+ React.useEffect(()=>{fetch("/api/questions").then(r=>r.json()).then(d=>setQuestions(d.questions||[])).catch(()=>setError("Could not load questions."));fetch("/api/health").then(r=>r.json()).then(setHealth).catch(()=>{});},[]);
+ React.useEffect(()=>{refresh()},[refresh]);
+ async function auth(e){e.preventDefault();setAuthError("");setBusy(true);try{const d=await api("/api/auth/"+mode,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(form)});localStorage.setItem(KEY,d.token);setToken(d.token);setUser(d.user);setTab("assessment")}catch(x){setAuthError(x.message)}finally{setBusy(false)}}
+ async function logout(){try{await api("/api/auth/logout",{method:"POST"})}catch{}localStorage.removeItem(KEY);setToken("");setUser(null);setHistory([]);setStats(null)}
+ async function submit(e){e.preventDefault();setError("");if(Object.keys(answers).length!==21){setError("Answer all 21 questions first.");return}if(research&&!store){setError("Research consent requires storage consent.");return}if(store&&!user){setError("Sign in before saving your assessment.");setTab("account");return}setBusy(true);try{const d=await api("/api/assessment",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({responses:questions.map((_,i)=>Number(answers[i])),storage_consent:store,research_consent:research})});setResult(d);if(d.saved)refresh()}catch(x){setError(x.message)}finally{setBusy(false)}}
+ async function send(e){e.preventDefault();if(!chat.trim())return;setBusy(true);try{const d=await api("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:chat,save_history:saveChat})});setMessages(m=>[...m,{role:"you",text:chat},{role:"companion",text:d.reply}]);setChat("")}catch(x){setError(x.message)}finally{setBusy(false)}}
+ async function deletePath(path,msg){if(!confirm(msg))return;try{await api(path,{method:"DELETE"});if(path==="/api/account"){localStorage.removeItem(KEY);setToken("");setUser(null)}if(path==="/api/assessments")setHistory([]);if(path==="/api/chat/history")setMessages([])}catch(x){setError(x.message)}}
+ return <main className="app"><header><a className="logo" href="#">ori<span>mind</span><small>WELLBEING INTELLIGENCE</small></a><div className="headright"><span className="online">● {health?.mongodb==="connected"?"Services online":"Local prototype"}</span>{user?<><span>Hi, {user.name}</span><button className="light" onClick={logout}>Sign out</button></>:<button className="light" onClick={()=>setTab("account")}>Sign in</button>}</div></header>
+ <section className="hero"><div><small>YOUR PRIVATE WELLBEING COMPANION</small><h1>Understand your mind.<br/><i>Care for your whole self.</i></h1><p>Structured self-reflection, supportive AI conversation and practical next steps—designed around privacy and human care.</p><span>✦ Self-reflection　 ✦ Consent-first　 ✦ Human support</span></div><div className="hero-art"><b>✳</b><strong>One step at a time.</strong><small>There is no perfect way to feel.</small></div></section>
+ <nav>{["assessment","companion","history","account",...(user?.is_admin?["insights"]:[])].map(x=><button className={tab===x?"active":""} onClick={()=>setTab(x)} key={x}>{x==="companion"?"AI companion":x==="insights"?"Admin insights":x[0].toUpperCase()+x.slice(1)}</button>)}</nav>
+ {error&&<div className="error" role="alert">{error}<button onClick={()=>setError("")}>×</button></div>}
+ {tab==="account"&&<section className="panel"><small>YOUR PRIVATE SPACE</small><h2>{user?"Account":"Welcome to orimind"}</h2>{user?<><p>{user.name} · {user.email}</p><p className="muted">Your personal assessments are isolated from other accounts.</p><button className="danger" onClick={()=>deletePath("/api/account","Permanently delete your account, saved assessments and chat history?")}>Delete account and data</button></>:<form className="auth" onSubmit={auth}><div className="switch"><button type="button" className={mode==="login"?"active":""} onClick={()=>setMode("login")}>Sign in</button><button type="button" className={mode==="register"?"active":""} onClick={()=>setMode("register")}>Create account</button></div>{mode==="register"&&<label>Name<input required maxLength="80" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/></label>}<label>Email<input required type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})}/></label><label>Password<input required type="password" minLength="12" maxLength="128" value={form.password} onChange={e=>setForm({...form,password:e.target.value})}/><small>At least 12 characters.</small></label>{authError&&<p className="error">{authError}</p>}<button className="primary" disabled={busy}>{mode==="login"?"Sign in":"Create account"}</button></form>}</section>}
+ {tab==="assessment"&&<section className="panel"><small>01 / SELF REFLECTION</small><h2>A moment to check in</h2><p className="muted">Answer based on how you have been feeling. This is a screening aid, not a diagnosis.</p><div className="progress"><span style={{width:(Object.keys(answers).length/21*100)+"%"}}/></div><small>{Object.keys(answers).length} of 21 answered</small><form onSubmit={submit}>{questions.map((q,i)=><fieldset key={i}><legend><b>{String(i+1).padStart(2,"0")}</b>{q.question}</legend><div className="options">{q.options.map((o,j)=><label className={String(answers[i])===String(j)?"chosen":""} key={j}><input type="radio" name={"q"+i} checked={String(answers[i])===String(j)} onChange={()=>setAnswers(a=>({...a,[i]:j}))}/>{o.text}</label>)}</div></fieldset>)}<div className="consent"><b>Your choices matter</b><label><input type="checkbox" checked={store} onChange={e=>setStore(e.target.checked)}/> Save to my private account history {user?"":"(sign in required)"}</label><label><input type="checkbox" checked={research} onChange={e=>setResearch(e.target.checked)}/> Separately allow de-identified experimental research use</label></div><button className="primary" disabled={busy||questions.length!==21}>Complete reflection →</button></form>{result&&<div className="result"><small>YOUR SCREENING SUMMARY</small><div className="score">{result.total_score}<small>/ 63</small></div><h3>{result.risk_level}</h3><p>{result.notice}</p>{result.safety_guidance&&<p className="error">{result.safety_guidance}</p>}<h4>Suggested next steps</h4><ul>{(result.recommendations?.main_recommendations||[]).map((x,i)=><li key={i}>{x}</li>)}</ul><small>{result.storage_notice}</small></div>}<p className="footnote">Not a medical service. If you feel unsafe or may act on harmful thoughts, contact local emergency services or a qualified professional.</p></section>}
+ {tab==="companion"&&<section className="panel"><small>02 / SUPPORTIVE CONVERSATION</small><h2>A space to put it into words</h2><p className="muted">The optional local AI companion offers supportive conversation, not clinical advice.</p><div className="chatbox">{messages.length?messages.map((m,i)=><p className={m.role} key={i}><b>{m.role}:</b> {m.text}</p>):<div className="empty">✳<h3>Every feeling deserves a little space.</h3><p>What has been on your mind today?</p></div>}</div><form className="send" onSubmit={send}><input value={chat} onChange={e=>setChat(e.target.value)} placeholder="Write what is on your mind…" maxLength="4000"/><button className="primary" disabled={busy}>Send ↑</button></form>{user&&<label className="check"><input type="checkbox" checked={saveChat} onChange={e=>setSaveChat(e.target.checked)}/> I consent to saving this conversation.</label>}{user&&<button className="text" onClick={async()=>{try{const d=await api("/api/chat/history");setMessages((d.messages||[]).reverse().flatMap(m=>[{role:"you",text:m.user_message},{role:"companion",text:m.assistant_message}]))}catch(x){setError(x.message)}}}>Load saved chats</button>}{user&&<button className="text dangerText" onClick={()=>deletePath("/api/chat/history","Delete saved chat history?")}>Delete saved chats</button>}</section>}
+ {tab==="history"&&<section className="panel"><small>03 / YOUR JOURNEY</small><h2>Personal history</h2>{!user?<p>Sign in to view your private history.</p>:history.length===0?<p>No saved assessments yet.</p>:history.map(h=><article className="history" key={h.id}><div><b>{h.risk_level}</b><small>{new Date(h.created_at).toLocaleString()}</small></div><strong>{h.total_score}<small>/63</small></strong></article>)}{user&&history.length>0&&<button className="danger" onClick={()=>deletePath("/api/assessments","Delete all assessment history?")}>Delete assessment history</button>}</section>}
+ {tab==="insights"&&user?.is_admin&&<section className="panel"><small>ADMIN / AGGREGATE ONLY</small><h2>Research overview</h2><p className="muted">No individual response data is shown here.</p>{stats&&<div className="stats"><div><b>{stats.total_assessments}</b><small>Total assessments</small></div><div><b>{stats.research_consented}</b><small>Research consented</small></div>{stats.by_level.map(x=><div key={x.level}><b>{x.count}</b><small>{x.level}</small></div>)}</div>}</section>}
+ <footer><span>orimind · Responsible AI, human-first care</span><span>Academic prototype · Not a clinical tool</span></footer></main>
 }
-createRoot(document.getElementById("root")).render(<App />);
+createRoot(document.getElementById("root")).render(<App/>);
