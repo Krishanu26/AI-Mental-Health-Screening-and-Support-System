@@ -109,7 +109,7 @@ pip install -r requirements.txt
 copy .env.example .env
 ```
 
-The example environment configuration uses a local MongoDB instance at:
+Assessment scoring can be completed without database storage consent; in that case the result is returned without creating a MongoDB record. Research/model-training consent is separate and requires storage consent. The example environment configuration uses a local MongoDB instance at:
 
 ```text
 mongodb://127.0.0.1:27017
@@ -207,7 +207,7 @@ Mental-health information is sensitive. This repository is a development prototy
 | `frontend/` | React/Vite user interface. |
 | `notebooks/` | Project notebook files. |
 
-Assessment records are stored in the MongoDB `users` collection in the database configured by `MONGODB_DATABASE`. Training metadata is stored in `model_registry` and `training_runs`; model artifacts are stored in GridFS.
+Consented assessment records are stored in the MongoDB `users` collection in the database configured by `MONGODB_DATABASE`. Research-training text fields are only added when separate research consent is granted. Optional recommendation feedback uses a random opaque token rather than exposing the MongoDB document ID. Training metadata is stored in `model_registry` and `training_runs`; model artifacts are stored in GridFS.
 
 ## Limitations and responsible use
 
@@ -218,7 +218,7 @@ Assessment records are stored in the MongoDB `users` collection in the database 
 - Do not rely on this application during an emergency. Contact local emergency services or a qualified crisis-support provider when immediate help is needed.
 - The documented setup is intended for local development and testing, not production deployment with real patient records.
 
-## Stop the application
+## Run automated checks\n\n```powershell\npython -m unittest discover -s backend -p "test_*.py" -v\ncd frontend\nnpm ci\nnpm run build\n```\n\nGitHub Actions runs the backend unit tests and frontend production build on pushes and pull requests to `main`.\n\n## Stop the application
 
 Press **Ctrl+C** in the terminal running `python main.py`. The launcher stops the frontend, backend, and background worker.
 
