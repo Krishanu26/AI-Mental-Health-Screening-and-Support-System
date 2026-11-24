@@ -1,4 +1,4 @@
-# ORI AI Mental Health — one-command local development launcher
+# AI Mental Health Screening and Support System
 
 AI-based mental-health screening and wellbeing companion built with React,
 Flask, and MongoDB, with optional recommendation follow-up and no physical
