@@ -1,31 +1,105 @@
 # AI Mental Health Screening and Support System
 
-AI-based mental-health screening and wellbeing companion built with React,
-Flask, and MongoDB, with optional recommendation follow-up and no physical
-movement tracking.
+An AI-assisted web application for preliminary mental-health self-screening and wellbeing support. The project combines a structured 21-question Beck Depression Inventory-II (BDI-II)-based assessment with conversational support, text analysis, and score-based recommendations.
 
-This is a modular local-development scaffold extracted from your uploaded notebook. Start the application with **one command**:
+The application is a student-developed prototype for awareness and preliminary screening. It is **not a medical device, clinical diagnosis, substitute for a mental-health professional, or emergency/crisis service**.
 
-```powershell
-python main.py
+## Project at a glance
+
+| Area | Implementation |
+|---|---|
+| Frontend | React and Vite |
+| Backend | Python and Flask |
+| Database | MongoDB |
+| Conversational AI | LLaMA 3 through optional local Ollama integration |
+| NLP and machine learning | Text preprocessing, CountVectorizer, and Logistic Regression (as described in the project report) |
+| Assessment | 21-item BDI-II-based questionnaire with automated score calculation |
+| Local startup | `python main.py` |
+
+## Key features
+
+- **Structured self-assessment:** presents 21 BDI-II-based questions. Each response is scored from 0 to 3 and the total is calculated automatically.
+- **Severity-based result:** groups the total score into minimal, mild, moderate, or severe screening bands.
+- **Conversational support:** provides a chat interface for supportive, context-aware interaction. The LLaMA 3/Ollama integration is optional and must be enabled in the environment configuration.
+- **NLP and experimental text classification:** preprocesses text and supports analysis of language patterns. The project report describes CountVectorizer and Logistic Regression for this experimental module.
+- **Personalized guidance:** presents motivational feedback, self-care suggestions, stress-management guidance, and recommendations to seek professional support where appropriate.
+- **Critical-result guidance:** severe screening results can be accompanied by professional-support and helpline guidance. This is informational escalation guidance, not validated suicide-risk or crisis detection.
+- **Consent-aware storage:** assessment storage consent and research/model-training consent are handled separately.
+- **Responsive web interface:** the frontend is designed for use on desktop and mobile-sized screens.
+
+## Assessment and score interpretation
+
+The assessment flow contains 21 questions. Each answer contributes a score from **0 to 3**, giving a total score from 0 to 63.
+
+| Total score | Screening band |
+|---:|---|
+| 0–13 | Minimal |
+| 14–19 | Mild |
+| 20–28 | Moderate |
+| 29–63 | Severe |
+
+These are the BDI-II screening bands documented in the project report and application description. They are screening categories only; they must not be interpreted as a diagnosis. A qualified professional should assess concerns about depression or other mental-health conditions.
+
+## How the application works
+
+1. The user opens the React web interface and registers or signs in, where supported by the current build.
+2. The user interacts with the chatbot and completes the 21-question assessment.
+3. The Flask backend receives the responses and calculates the questionnaire total.
+4. The application maps the total to the corresponding screening band and prepares relevant feedback.
+5. The chatbot can provide supportive conversation when the optional Ollama integration is enabled.
+6. Assessment records are stored in MongoDB only when the user grants storage consent.
+7. De-identified records are eligible for experimental model training only when the separate research consent is granted.
+
+## System architecture
+
+```text
+User
+  |
+  v
+React + Vite frontend
+  |
+  v
+Flask API / application backend
+  |----------------------|
+  v                      v
+Assessment engine        Optional Ollama / LLaMA 3 chat
+  |
+  v
+MongoDB storage
+  |
+  v
+Consent-gated experimental training worker
 ```
 
-The launcher starts:
-- Flask API on `http://127.0.0.1:5000`
-- React/Vite frontend on `http://127.0.0.1:5173` (runs `npm install` on first launch if needed)
-- MongoDB-backed assessment storage
-- A background threshold-training worker (checks every 60 seconds)
-- Optional Ollama chat integration when enabled in `.env`
+The backend coordinates frontend requests, assessment scoring, chatbot integration, and database access. The training worker operates locally while the application launcher is running.
 
-## 1. Requirements
-- Python 3.11 or 3.12
-- Node.js 20+ and npm (for React frontend)
-- MongoDB Atlas account or local MongoDB
-- Optional: Ollama installed with a model such as `llama3`
+## Experimental model-training note
 
-## 2. Setup on Windows / VS Code
+The repository includes an experimental background training worker. It checks MongoDB periodically for newly submitted records that have research/model-training consent. A training run requires sufficient examples across at least two labels and uses a stratified split. Candidate models are evaluated against a configured holdout weighted-F1 threshold; a candidate that does not meet the threshold is not promoted over the current champion.
 
-Open this folder in VS Code, then run in the terminal:
+**Important limitation:** the training label is derived from the BDI-II total-score category. The text model therefore learns to reproduce categories generated by the questionnaire score. It does **not** independently detect, diagnose, or clinically predict depression. The deterministic questionnaire score remains the displayed screening category. Experimental model output must not be used for clinical decisions.
+
+The worker runs only while `main.py` is running. This is a local-development workflow, not an always-on production service.
+
+## Technology stack
+
+- **Python:** backend application and assessment-processing logic.
+- **Flask:** API routes, request handling, application logic, and integration between the frontend, database, and AI components.
+- **React + Vite:** web user interface and local frontend development server.
+- **MongoDB:** persistence for consented assessment records and training metadata.
+- **Ollama + LLaMA 3 (optional):** local conversational model integration.
+- **Scikit-learn / NLP tooling:** experimental text-processing and classification workflow described in the project report.
+
+## Requirements
+
+- Python **3.11 or 3.12**
+- Node.js **20 or newer** and npm
+- MongoDB locally, or a MongoDB Atlas account
+- Optional: [Ollama](https://ollama.com/) installed with a compatible model such as `llama3`
+
+## Run locally on Windows
+
+Open the repository folder in VS Code, then run these commands in PowerShell:
 
 ```powershell
 python -m venv .venv
@@ -35,66 +109,119 @@ pip install -r requirements.txt
 copy .env.example .env
 ```
 
-The example `.env` uses a local MongoDB server at `mongodb://127.0.0.1:27017`.
-Start MongoDB locally before running the app, or edit `.env` and set your Atlas
-connection string as `MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-url>/`.
-Do not paste credentials into source code or commit `.env`.
+The example environment configuration uses a local MongoDB instance at:
 
-In MongoDB Atlas:
-1. Create a database user.
-2. Add your current IP in Network Access.
-3. Copy the Python driver connection string.
-4. Replace username/password/cluster in `.env`.
+```text
+mongodb://127.0.0.1:27017
+```
 
-Then run:
+Start MongoDB before launching the application, or edit `.env` and set `MONGODB_URI` to your MongoDB Atlas connection string. For example:
+
+```text
+MONGODB_URI=mongodb+srv://<username>:<password>@<cluster-url>/
+```
+
+Do not put database credentials directly in source code or commit your `.env` file.
+
+### Start the application
 
 ```powershell
 python main.py
 ```
 
-Open `http://127.0.0.1:5173`.
-Check `http://127.0.0.1:5000/api/health` and confirm `mongodb` is `connected`.
+The launcher starts:
 
-## 3. What is saved
-Assessment storage consent and research/model-training consent are separate:
-- `storage_consent` must be true to save the assessment.
-- `research_consent` must be true to use a de-identified record in experimental training.
-- Users can optionally report whether they followed a suggested next step; this response is saved with their assessment after they submit it.
-- The app does not track physical movement.
-- The app does not save data when storage consent is declined.
-- Do not enter real patient data into this development prototype until you have suitable security, privacy notices, access controls, retention rules, and legal/ethics approval.
+- Flask API: `http://127.0.0.1:5000`
+- React/Vite frontend: `http://127.0.0.1:5173`
+- MongoDB-backed assessment storage
+- Background threshold-training worker
+- Optional Ollama chat integration, when enabled
 
-## 4. Automatic training
-The worker polls MongoDB every `TRAINING_POLL_SECONDS` seconds. It trains when at least `TRAINING_THRESHOLD` new research-consented records have arrived since the previous completed training batch. It requires at least two labels and enough examples per label for a stratified split.
+The launcher installs frontend npm dependencies on first launch when they are missing. Open **http://127.0.0.1:5173** in your browser.
 
-Candidate models are stored in MongoDB GridFS with metadata in `model_registry`. Promotion requires the configured holdout weighted-F1 threshold. A rejected candidate is retained for audit but does not replace the champion.
+To check the backend and database connection, open:
 
-**Important scientific limitation:** in this project the target category is calculated from the BDI-II total score. The text model therefore learns to reproduce score-derived categories; it does not independently detect or diagnose depression. It is experimental and must never drive clinical decisions. The deterministic questionnaire score remains the displayed screening category.
+```text
+http://127.0.0.1:5000/api/health
+```
 
-The threshold worker only runs while `main.py` is running. This is a local development setup, not a production always-on service.
+Confirm that the MongoDB status is reported as `connected`.
 
-## 5. Optional Ollama chatbot
-Install Ollama separately, pull a model, and set in `.env`:
+### MongoDB Atlas setup
+
+1. Create a database user in MongoDB Atlas.
+2. Add your current IP address under Network Access.
+3. Copy the connection string for the Python driver.
+4. Put the connection string in `.env` as `MONGODB_URI`.
+5. Start the application with `python main.py`.
+
+## Optional Ollama chatbot setup
+
+The Ollama integration is optional. Install Ollama separately, download a compatible model, and set the following values in `.env`:
+
 ```env
 OLLAMA_ENABLED=true
 OLLAMA_MODEL=llama3
 ```
-Then start Ollama before `python main.py`. The chatbot is supportive only and does not provide diagnosis or crisis assessment.
 
-## 6. Project layout
-- `main.py`: one-command process launcher
-- `backend/app.py`: Flask routes
-- `backend/database.py`: MongoDB connection and collections
-- `backend/training.py`: threshold training, evaluation, GridFS registry
-- `backend/assessment.py`: score calculation and consent-aware persistence
-- `backend/chatbot.py`: optional Ollama integration
-- `backend/assessment_data.py`: questionnaire and recommendation data extracted from your notebook
-- `frontend/`: React UI
-- `notebooks/`: your modified notebook preserved
+Start Ollama before running `python main.py`. When Ollama is disabled or unavailable, the application should be treated as operating without that optional local chat integration.
 
-Assessment documents are stored in the `users` collection in the database
-configured by `MONGODB_DATABASE`. Training metadata is stored in
-`model_registry` and `training_runs`; model artifacts use GridFS.
+## Data, consent, and privacy
 
-## 7. Stop
-Press `Ctrl+C` in the terminal running `main.py`. It stops the frontend and backend worker.
+The application separates two consent choices:
+
+- `storage_consent`: must be `true` for an assessment record to be saved.
+- `research_consent`: must be `true` before a de-identified record can be considered for experimental model training.
+
+A user may also submit an optional response about whether they followed a suggested next step; where enabled, this response is stored with the assessment.
+
+Mental-health information is sensitive. This repository is a development prototype. **Do not use real patient data** until appropriate security controls, privacy notices, access restrictions, retention and deletion rules, and legal/ethics approvals are in place.
+
+## Repository structure
+
+```text
+.
+├── main.py
+├── backend/
+│   ├── app.py
+│   ├── database.py
+│   ├── training.py
+│   ├── assessment.py
+│   ├── chatbot.py
+│   └── assessment_data.py
+├── frontend/
+├── notebooks/
+├── requirements.txt
+└── .env.example
+```
+
+| File or folder | Purpose |
+|---|---|
+| `main.py` | Starts and manages the local frontend, backend, and worker processes. |
+| `backend/app.py` | Flask application routes. |
+| `backend/database.py` | MongoDB connection and collection access. |
+| `backend/training.py` | Experimental training, evaluation, and model registry logic. |
+| `backend/assessment.py` | Questionnaire scoring and consent-aware persistence. |
+| `backend/chatbot.py` | Optional Ollama chatbot integration. |
+| `backend/assessment_data.py` | Questionnaire and recommendation data. |
+| `frontend/` | React/Vite user interface. |
+| `notebooks/` | Project notebook files. |
+
+Assessment records are stored in the MongoDB `users` collection in the database configured by `MONGODB_DATABASE`. Training metadata is stored in `model_registry` and `training_runs`; model artifacts are stored in GridFS.
+
+## Limitations and responsible use
+
+- The application provides preliminary screening and awareness support; it does not diagnose depression or any other condition.
+- Questionnaire scores and recommendations should not replace an assessment by a qualified mental-health professional.
+- The experimental text classifier learns from questionnaire-derived labels and is not an independent clinical detector.
+- The chatbot is supportive only. It does not provide validated suicide-risk assessment, emergency intervention, or crisis monitoring.
+- Do not rely on this application during an emergency. Contact local emergency services or a qualified crisis-support provider when immediate help is needed.
+- The documented setup is intended for local development and testing, not production deployment with real patient records.
+
+## Stop the application
+
+Press **Ctrl+C** in the terminal running `python main.py`. The launcher stops the frontend, backend, and background worker.
+
+## Acknowledgement
+
+This project was developed as an academic project in the Department of Computer Science and Engineering at Haldia Institute of Technology, under the guidance of Mr. Umesh Pal.
