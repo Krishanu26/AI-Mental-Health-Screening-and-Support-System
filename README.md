@@ -218,6 +218,16 @@ Consented assessment records are stored in the MongoDB `users` collection in the
 - Do not rely on this application during an emergency. Contact local emergency services or a qualified crisis-support provider when immediate help is needed.
 - The documented setup is intended for local development and testing, not production deployment with real patient records.
 
+## Portfolio capabilities
+
+- Password-hashed registration and login with expiring sessions.
+- Per-account assessment history and opt-in saved chat history.
+- User-controlled deletion of account, assessment, and chat data.
+- Admin-only aggregate analytics configured with `ADMIN_EMAILS`.
+- Security headers and bounded API request bodies.
+
+Set `ADMIN_EMAILS=admin@example.com` in `.env` to enable the aggregate insights page for that account. The application remains a research/academic prototype and must not be used with real patient data without privacy, security, ethics, and legal review.
+
 ## Run automated checks\n\n```powershell\npython -m unittest discover -s backend -p "test_*.py" -v\ncd frontend\nnpm ci\nnpm run build\n```\n\nGitHub Actions runs the backend unit tests and frontend production build on pushes and pull requests to `main`.\n\n## Stop the application
 
 Press **Ctrl+C** in the terminal running `python main.py`. The launcher stops the frontend, backend, and background worker.
