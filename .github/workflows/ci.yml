@@ -51,8 +51,12 @@ jobs:
         run: docker compose up -d --build --wait --wait-timeout 240
       - name: Pull a real Llama model into Ollama
         run: docker compose exec -T ollama ollama pull llama3.2:1b
-      - name: Exercise frontend, API, MongoDB and Ollama over HTTP
-        run: python tests/e2e_smoke.py
+      - name: Smoke test frontend, MongoDB and real Ollama chat
+        run: |
+          curl -fsS http://127.0.0.1:8080/ | grep -qi orimind
+          curl -fsS http://127.0.0.1:5000/api/health | grep -q connected
+          docker compose exec -T ollama ollama run llama3.2:1b "Say hello in one short sentence."
+          curl -fsS -X POST http://127.0.0.1:5000/api/chat -H "Content-Type: application/json" -d '{"message":"Say hello in one short sentence.","save_history":false}' | python -c "import json,sys; d=json.load(sys.stdin); assert len(d.get('reply','').strip()) > 5 and 'unavailable' not in d['reply'].lower(); print('Ollama chat API passed')"
       - name: Collect container logs on success or failure
         if: always()
         run: docker compose logs --no-color || true
