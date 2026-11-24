@@ -1,18 +1,30 @@
 from datetime import datetime, timezone
+
 from bson import ObjectId
 from bson.errors import InvalidId
+
 from backend.assessment_data import BDI2_QUESTIONS
 
+
 def score_responses(responses: list[int]) -> tuple[int, str]:
+    """Validate the 21 answers and return the questionnaire total and band."""
+    if not isinstance(responses, list):
+        raise ValueError("Responses must be a list of 21 option indexes.")
     if len(responses) != len(BDI2_QUESTIONS):
         raise ValueError(f"Expected {len(BDI2_QUESTIONS)} answers.")
+
     total = 0
     for idx, (answer, question) in enumerate(zip(responses, BDI2_QUESTIONS)):
         if isinstance(answer, bool) or not isinstance(answer, int):
             raise ValueError(f"Answer {idx + 1} must be an integer option index.")
-        if answer < 0 or answer >= len(question["options"]):
+        options = question.get("options", [])
+        if answer < 0 or answer >= len(options):
             raise ValueError(f"Answer {idx + 1} is outside the allowed options.")
-        total += int(question["options"][answer]["score"])
+        score = options[answer].get("score")
+        if isinstance(score, bool) or not isinstance(score, int) or not 0 <= score <= 3:
+            raise ValueError(f"Question {idx + 1} has an invalid scoring configuration.")
+        total += score
+
     if not 0 <= total <= 63:
         raise ValueError("Total score is outside the expected BDI-II range.")
     if total <= 13:
@@ -25,12 +37,16 @@ def score_responses(responses: list[int]) -> tuple[int, str]:
         level = "Severe Depression"
     return total, level
 
-def create_assessment_document(responses: list[int], storage_consent: bool,
-                               research_consent: bool) -> dict:
-    if not storage_consent:
-        raise PermissionError("Storage consent is required to save this assessment.")
-    if not isinstance(research_consent, bool):
-        raise ValueError("Research consent must be true or false.")
+
+def create_assessment_document(
+    responses: list[int], storage_consent: bool, research_consent: bool
+) -> dict:
+    """Build a result; callers decide whether to persist it."""
+    if not isinstance(storage_consent, bool) or not isinstance(research_consent, bool):
+        raise ValueError("Consent values must be true or false.")
+    if research_consent and not storage_consent:
+        raise ValueError("Research consent requires separate assessment-storage consent.")
+
     total, level = score_responses(responses)
     selected = []
     for question, answer in zip(BDI2_QUESTIONS, responses):
@@ -38,25 +54,29 @@ def create_assessment_document(responses: list[int], storage_consent: bool,
         selected.append({
             "question": question["question"],
             "selected_text": option["text"],
-            "score": int(option["score"])
+            "score": int(option["score"]),
         })
-    # Self-harm item is item 9 in BDI-II. This is a simple prompt to seek human
-    # support, not an automated risk assessment or crisis intervention.
-    self_harm_item_positive = len(responses) >= 9 and int(
+
+    # BDI-II item 9 prompts human follow-up; it is not a suicide-risk assessment.
+    self_harm_item_positive = int(
         BDI2_QUESTIONS[8]["options"][responses[8]]["score"]
     ) > 0
-    return {
+
+    document = {
         "total_score": total,
         "risk_level": level,
         "responses": selected,
-        "raw_responses_for_ml": [x["selected_text"] for x in selected],
-        "storage_consent": True,
+        "storage_consent": storage_consent,
         "research_consent": research_consent,
         "training_status": "eligible" if research_consent else "not_consented",
         "created_at": datetime.now(timezone.utc),
-        "schema_version": 3,
-        "self_harm_item_positive": self_harm_item_positive
+        "schema_version": 4,
+        "self_harm_item_positive": self_harm_item_positive,
     }
+    if research_consent:
+        document["raw_responses_for_ml"] = [item["selected_text"] for item in selected]
+    return document
+
 
 def save_assessment(document: dict) -> str:
     from backend.database import get_collections
@@ -64,9 +84,12 @@ def save_assessment(document: dict) -> str:
     result = assessments.insert_one(document)
     return str(result.inserted_id)
 
+
 def save_recommendation_feedback(assessment_id: str, followed: bool) -> None:
     if not isinstance(followed, bool):
         raise ValueError("Follow-up response must be true or false.")
+    if not isinstance(assessment_id, str):
+        raise ValueError("Invalid assessment ID.")
     try:
         object_id = ObjectId(assessment_id)
     except (InvalidId, TypeError) as exc:
@@ -76,12 +99,10 @@ def save_recommendation_feedback(assessment_id: str, followed: bool) -> None:
     _, assessments, _, _ = get_collections()
     result = assessments.update_one(
         {"_id": object_id},
-        {"$set": {
-            "recommendation_feedback": {
-                "followed": followed,
-                "recorded_at": datetime.now(timezone.utc)
-            }
-        }}
+        {"$set": {"recommendation_feedback": {
+            "followed": followed,
+            "recorded_at": datetime.now(timezone.utc),
+        }}},
     )
     if result.matched_count == 0:
         raise LookupError("Assessment not found.")
