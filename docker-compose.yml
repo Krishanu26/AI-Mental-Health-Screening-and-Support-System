@@ -9,27 +9,70 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
   api:
     build: .
     restart: unless-stopped
-    env_file: .env
     environment:
       MONGODB_URI: mongodb://mongodb:27017
-      FLASK_HOST: 0.0.0.0
+      MONGODB_DATABASE: ${MONGODB_DATABASE:-orimind}
+      OLLAMA_ENABLED: ${OLLAMA_ENABLED:-false}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:1b}
+      OLLAMA_BASE_URL: http://ollama:11434
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      TRAINING_THRESHOLD: ${TRAINING_THRESHOLD:-50}
+      TRAINING_POLL_SECONDS: ${TRAINING_POLL_SECONDS:-60}
+      MIN_MODEL_WEIGHTED_F1: ${MIN_MODEL_WEIGHTED_F1:-0.60}
     ports:
       - "5000:5000"
     depends_on:
       mongodb:
         condition: service_healthy
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/api/health', timeout=4)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
   worker:
     build: .
     restart: unless-stopped
     command: ["python", "-m", "backend.worker"]
-    env_file: .env
     environment:
       MONGODB_URI: mongodb://mongodb:27017
+      MONGODB_DATABASE: ${MONGODB_DATABASE:-orimind}
+      TRAINING_THRESHOLD: ${TRAINING_THRESHOLD:-50}
+      TRAINING_POLL_SECONDS: ${TRAINING_POLL_SECONDS:-60}
+      MIN_MODEL_WEIGHTED_F1: ${MIN_MODEL_WEIGHTED_F1:-0.60}
     depends_on:
       mongodb:
         condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
 volumes:
   mongo_data:
+  ollama_data:
